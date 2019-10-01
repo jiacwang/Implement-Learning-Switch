@@ -1,0 +1,107 @@
+Q1: In the provided network, write out the full set forwarding table entries that would result if all hosts were pinging all other hosts.
+
+//DONE
+//switch 1: Address 00:00:00:00:01:01, port 1
+            Address 00:00:00:00:02:02, port 2
+            Address 00:00:00:00:03:03, port 3
+
+  switch 2: Address 00:00:00:00:01:01, port 2
+            Address 00:00:00:00:02:02, port 1
+            Address 00:00:00:00:03:03, port 3
+
+  switch 3: Address 00:00:00:00:01:01, port 2
+            Address 00:00:00:00:02:02, port 3
+            Address 00:00:00:00:03:03, port 1
+
+Q2: Come up with a set of mininet commands that test the correctness of your implementation.  Write the commands and what they are intended to test below.
+
+//DONE
+dump: it shows the infromation of my three ConfiguredP4RuntimeSwitch, s1, s2, and s3
+      Also shows the information of the host
+h1 arping -i h1-eth0 -t 00:00:00:00:02:02 10.0.2.2
+h1 arping -i h1-eth0 -t 00:00:00:00:03:03 10.0.3.3
+h2 arping -i h2-eth0 -t 00:00:00:00:01:01 10.0.1.1
+h2 arping -i h2-eth0 -t 00:00:00:00:03:03 10.0.3.3
+h3 arping -i h3-eth0 -t 00:00:00:00:01:01 10.0.1.1
+h3 arping -i h3-eth0 -t 00:00:00:00:02:02 10.0.2.2
+
+The above commands does arping between the three hosts, and I have tested all of them.
+All the packets are transmitted and received correctly. 0% unanswered.
+Thus the implementation should be correct.
+
+Q3: In this project, you needed to deal with the data plane and control plane separately.  How is this related to the concept of Layering we discussed in class?
+Postulate why we might we need separate data and control planes.
+
+//DONE
+Data plane does the forwarding, it decides what to do with a packet using
+a routing table . Control plane creates contents for the routing table. These abstract logical concepts
+are much like layering in OSI model. In OSI model, we have data link layer over physical layer,
+network layer over data link layer, etc. Same here, control plane over data plane, and management
+plane over control plane. Such layering concept gives switch better functionality.
+why we need to separate data and control planes: The separation of the two planes
+makes it easier for us to configure the behavior of the switch. If two planes are
+tied together, once a switch is a configured, when we want the switch to behave in a different way, we will
+have to rebuild the whole system again. But now with control plane separated from data plane,
+we only need to rebuild control plane, then the data plane will act automatically as the control plane
+specifies, which makes the management of switch much easier.
+
+
+
+Q4: Why is multicast still necessary in a learning switch?
+
+//DONE
+A learning switch can learn, but it doesn't mean the switch is able to know where to
+forward the packet initially when the forwarding table is empty.
+If we don't have multicast and let the switch 'guess' where to send the packet when there is
+no associated forwarding table entry, the device with correct destination MAC address
+may never be able to receive the packet. In this case,
+the forwarding table will not get the correct table entry.
+
+
+Q5: Why does the multicast group depend on the ingress port?  What would happen if we did a broadcast on every Unknown MAC address (try it and tell us what you see)?
+
+//DONE
+// We set multicast group ID same as the ingress port to avoid the packet to be sent back to where it comes from.
+// If we did a broadcast on every Unknown MAC address, I got the following result:
+mininet> h1 arping -i h1-eth0 -t 00:00:00:00:02:02 10.0.2.2
+ARPING 10.0.2.2
+Timeout
+42 bytes from 00:00:00:00:02:02 (10.0.2.2): index=0 time=88.044 msec
+Timeout
+Timeout
+Timeout
+Timeout
+42 bytes from 00:00:00:00:02:02 (10.0.2.2): index=1 time=120.582 msec
+Timeout
+Timeout
+^C
+--- 10.0.2.2 statistics ---
+10 packets transmitted, 2 packets received,  80% unanswered (0 extra)
+rtt min/avg/max/std-dev = 88.044/104.313/120.582/16.269 ms
+
+And the terminal which runs the python program never stops. To explain this,
+let's say an unknown packet called 'A' with destination MAC address h2 comes to switch s3 from s1.
+Then s3 will broadcast the packet, cause packet 'A' sent back to s1.
+Then s1 will broadcast again, cause packet 'A' sent back to s3.
+Then s3 will broadcast back to s1... and so on...
+This will keep looping, as a result, the program never stops.
+This also leads to the Timeout shown above in the results.
+
+
+Q6: We did not implement timeouts in this project.  Using pseudocode, write the necessary logic of the control plane if it were to implement forwarding table timeouts.
+
+//DONE
+Let' say the aging time is 20 seconds. And there are three hosts with
+MAC addresses: 11:11:11:11:11:11, 22:22:22:22:22:22, 33:33:33:33:33:33
+
+Step 1: when a packet is received from MAC address AA:AA:AA:AA:AA:AA
+
+Step 2: start counting time
+
+Step 3: if another packet is received from same MAC address AA:AA:AA:AA:AA:AA,
+        and time<20 seconds, go back to step 2
+
+Step 4: if time>20 seconds, and no packet is received from same MAC address AA:AA:AA:AA:AA:AA,
+        go to Step 5
+
+Step 5: delete the forwarding table entry with MAC address AA:AA:AA:AA:AA:AA
